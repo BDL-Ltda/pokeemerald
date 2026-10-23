@@ -209,6 +209,15 @@ static void StepToward(u8 slot, struct ObjectEvent *objectEvent)
     if (ObjectEventIsMovementOverridden(objectEvent))
         return; // Still walking.
 
+    // A remote that walked out of view keeps its spawn tile as initialCoords,
+    // so the game's own culling may never remove it. Free the object slot here;
+    // TrySpawn brings it back once its tile is in view.
+    if (!IsTileInView(objectEvent->currentCoords.x, objectEvent->currentCoords.y))
+    {
+        Despawn(objectEvent);
+        return;
+    }
+
     if (dx == 0 && dy == 0)
     {
         if (objectEvent->facingDirection != remote->facing)
@@ -252,14 +261,19 @@ void CoopRemote_Update(void)
     struct CoopMailboxSlot msg;
     u8 slot, objectEventId, count;
 
+    // The ring holds at most COOP_MAILBOX_SLOT_COUNT - 1 messages; the cap only
+    // bounds the loop if Lua keeps writing while it runs.
     if (!CoopMailbox_IsLuaConnected())
     {
+        // Messages queued by the old session (for example during a battle, when
+        // the ring isn't read) are dropped, so a reconnect starts empty. Only
+        // the ROM's tail moves: Lua still owns the inbound head.
+        for (count = 0; count < COOP_MAILBOX_SLOT_COUNT && CoopMailbox_Pop(&msg); count++)
+            ;
         CoopRemote_DespawnAll();
         return;
     }
 
-    // The ring holds at most COOP_MAILBOX_SLOT_COUNT - 1 messages; the cap only
-    // bounds the loop if Lua keeps writing while it runs.
     for (count = 0; count < COOP_MAILBOX_SLOT_COUNT && CoopMailbox_Pop(&msg); count++)
         ApplyMessage(&msg);
 
