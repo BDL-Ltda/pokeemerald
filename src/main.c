@@ -24,6 +24,7 @@
 #include "main.h"
 #include "trainer_hill.h"
 #include "constants/rgb.h"
+#include "coop/mailbox.h"
 
 static void VBlankIntr(void);
 static void HBlankIntr(void);
@@ -112,6 +113,7 @@ void AgbMain(void)
     ResetBgs();
     SetDefaultFontsPointer();
     InitHeap(gHeap, HEAP_SIZE);
+    CoopMailbox_Init();
 
     gSoftResetDisabled = FALSE;
 
