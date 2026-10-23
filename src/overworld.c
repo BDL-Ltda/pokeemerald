@@ -6,6 +6,7 @@
 #include "bg.h"
 #include "cable_club.h"
 #include "clock.h"
+#include "coop/overworld.h"
 #include "event_data.h"
 #include "event_object_movement.h"
 #include "event_scripts.h"
@@ -1460,6 +1461,7 @@ void CB1_Overworld(void)
 {
     if (gMain.callback2 == CB2_Overworld)
         DoCB1_Overworld(gMain.newKeys, gMain.heldKeys);
+    CoopOverworld_Update();
 }
 
 static void OverworldBasic(void)
