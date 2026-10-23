@@ -20,6 +20,7 @@
 #include "sprite.h"
 #include "task.h"
 #include "trainer_see.h"
+#include "coop/coop_spike.h"
 #include "trainer_hill.h"
 #include "util.h"
 #include "constants/event_object_movement.h"
@@ -2195,7 +2196,7 @@ u8 GetObjectEventIdByPosition(u16 x, u16 y, u8 elevation)
 
     for (i = 0; i < OBJECT_EVENTS_COUNT; i++)
     {
-        if (gObjectEvents[i].active)
+        if (gObjectEvents[i].active && !CoopSpike_IsRemoteObjectEvent(&gObjectEvents[i]))
         {
             if (gObjectEvents[i].currentCoords.x == x
              && gObjectEvents[i].currentCoords.y == y
@@ -4711,7 +4712,7 @@ static bool8 DoesObjectCollideWithObjectAt(struct ObjectEvent *objectEvent, s16 
     for (i = 0; i < OBJECT_EVENTS_COUNT; i++)
     {
         curObject = &gObjectEvents[i];
-        if (curObject->active && curObject != objectEvent)
+        if (curObject->active && curObject != objectEvent && !CoopSpike_IsRemoteObjectEvent(curObject))
         {
             if ((curObject->currentCoords.x == x && curObject->currentCoords.y == y) || (curObject->previousCoords.x == x && curObject->previousCoords.y == y))
             {

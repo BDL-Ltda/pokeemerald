@@ -66,6 +66,7 @@
 #include "constants/songs.h"
 #include "constants/trainer_hill.h"
 #include "constants/weather.h"
+#include "coop/coop_spike.h"
 
 struct CableClubPlayer
 {
@@ -1459,7 +1460,10 @@ static void DoCB1_Overworld(u16 newKeys, u16 heldKeys)
 void CB1_Overworld(void)
 {
     if (gMain.callback2 == CB2_Overworld)
+    {
         DoCB1_Overworld(gMain.newKeys, gMain.heldKeys);
+        CoopSpike_Update();
+    }
 }
 
 static void OverworldBasic(void)
