@@ -7,5 +7,6 @@
 // Never renumber a type; add new ones at the end. 0 is reserved as invalid.
 #define COOP_MSG_NONE     0
 #define COOP_MSG_PRESENCE 1
+#define COOP_MSG_LEAVE    2 // Inbound only: a remote player left; frees its slot.
 
 #endif // GUARD_CONSTANTS_COOP_H

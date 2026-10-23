@@ -18,10 +18,13 @@ static bool8 sLocked;
 static u8 sFacing;
 static unsigned sReads;
 static unsigned sCases;
+static unsigned sRemoteCalls;
 
 void CB1_Overworld(void) {}
 void CB2_Overworld(void) {}
 static void OtherCallback(void) {}
+// This suite tests the publisher and shared hook, not the #25 renderer.
+void CoopRemote_Update(void) { sRemoteCalls++; }
 bool8 ArePlayerFieldControlsLocked(void) { return sLocked; }
 u8 GetPlayerFacingDirection(void) { sReads++; return sFacing; }
 
@@ -47,6 +50,7 @@ static void Setup(void)
     sFacing = DIR_EAST;
     sLocked = FALSE;
     sReads = 0;
+    sRemoteCalls = 0;
 }
 
 static bool8 Empty(void)
@@ -225,6 +229,22 @@ static void TestInvalidPlayerAndReset(void)
     sCases++;
 }
 
+static void TestSharedHook(void)
+{
+    Setup();
+    CoopOverworld_Update();
+    assert(Take().visible && sRemoteCalls == 1);
+    gMain.callback2 = OtherCallback;
+    CoopOverworld_Update();
+    assert(!Take().visible && sRemoteCalls == 1);
+    // Outbound still publishes the hide; rendering is not called during
+    // battle transitions/full-screen menus. Both paths resume in the field.
+    gMain.callback2 = CB2_Overworld;
+    CoopOverworld_Update();
+    assert(Take().visible && sRemoteCalls == 2);
+    sCases++;
+}
+
 int main(void)
 {
     TestReadinessAndTitle();
@@ -233,6 +253,7 @@ int main(void)
     TestLocksAndTransitions();
     TestFullRingRetriesLatest();
     TestInvalidPlayerAndReset();
+    TestSharedHook();
     printf("PASS coop presence: %u test groups (ASan/UBSan)\n", sCases);
     return 0;
 }
