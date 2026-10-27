@@ -21,6 +21,24 @@ STATIC_ASSERT(offsetof(struct CoopMailbox, inbound) == 0x208, CoopMailboxInbound
 
 STATIC_ASSERT(sizeof(COOP_MAILBOX_MAGIC) - 1 == COOP_MAILBOX_MAGIC_LENGTH, CoopMailboxMagicLength)
 
+// Multi-slot messages (docs/memory-map.md, "Multi-slot messages").
+STATIC_ASSERT(COOP_FRAGMENT_DATA_SIZE == 26, CoopFragmentDataSize)
+STATIC_ASSERT((COOP_MAILBOX_MESSAGE_MAX + COOP_FRAGMENT_DATA_SIZE - 1) / COOP_FRAGMENT_DATA_SIZE <= 256,
+              CoopFragmentIndexFitsU8)
+STATIC_ASSERT(COOP_MAILBOX_MESSAGE_MAX <= 0xFFFF, CoopFragmentTotalLengthFitsU16)
+
+// One multi-slot message on its way, in either direction. `done` counts the
+// data bytes already pushed (outbound) or collected (inbound).
+struct CoopMessageStream
+{
+    bool8 active;
+    u8 type;
+    u8 nextIndex;
+    u16 length;
+    u16 done;
+    u8 data[COOP_MAILBOX_MESSAGE_MAX];
+};
+
 // mGBA runs the Lua frame callback at the frame boundary, which can fall in the
 // middle of these functions. This compiler barrier keeps the slot accesses on
 // the correct side of the head/tail update, so Lua never sees a half-written
@@ -28,9 +46,15 @@ STATIC_ASSERT(sizeof(COOP_MAILBOX_MAGIC) - 1 == COOP_MAILBOX_MAGIC_LENGTH, CoopM
 #define COOP_MAILBOX_BARRIER() asm volatile("" ::: "memory")
 
 EWRAM_DATA struct CoopMailbox gCoopMailbox = {0};
+static EWRAM_DATA struct CoopMessageStream sOutMessage = {0};
+static EWRAM_DATA struct CoopMessageStream sInMessage = {0};
+// The last single-slot message CoopMailbox_Receive returned.
+static EWRAM_DATA struct CoopMailboxSlot sInSlot = {0};
 
 void CoopMailbox_Init(void)
 {
+    sOutMessage.active = FALSE;
+    sInMessage.active = FALSE;
     memset(&gCoopMailbox, 0, sizeof(gCoopMailbox));
     gCoopMailbox.layoutVersion = COOP_MAILBOX_LAYOUT_VERSION;
     gCoopMailbox.flags = COOP_MAILBOX_FLAG_ROM_READY;
@@ -88,4 +112,154 @@ bool8 CoopMailbox_IsLuaConnected(void)
 {
     COOP_MAILBOX_BARRIER(); // Lua sets and clears this bit between frames.
     return (gCoopMailbox.flags & COOP_MAILBOX_FLAG_LUA_CONNECTED) != 0;
+}
+
+static bool8 IsMessageType(u8 type)
+{
+    return type != COOP_MSG_NONE && type != COOP_MSG_FRAGMENT;
+}
+
+static u16 FragmentSize(u16 length, u16 done)
+{
+    return length - done < COOP_FRAGMENT_DATA_SIZE ? length - done : COOP_FRAGMENT_DATA_SIZE;
+}
+
+bool8 CoopMailbox_SendMessage(u8 type, const void *data, u16 len)
+{
+    if (sOutMessage.active || !CoopMailbox_IsLuaConnected() || !IsMessageType(type)
+     || len == 0 || len > COOP_MAILBOX_MESSAGE_MAX)
+        return FALSE;
+    sOutMessage.type = type;
+    sOutMessage.nextIndex = 0;
+    sOutMessage.length = len;
+    sOutMessage.done = 0;
+    memcpy(sOutMessage.data, data, len);
+    sOutMessage.active = TRUE;
+    CoopMailbox_PumpOutbound();
+    return TRUE;
+}
+
+void CoopMailbox_PumpOutbound(void)
+{
+    u8 fragment[COOP_MAILBOX_PAYLOAD_SIZE];
+    u16 size;
+
+    if (!sOutMessage.active)
+        return;
+    if (!CoopMailbox_IsLuaConnected())
+    {
+        // Nobody reads it. Lua drops the fragments it already has as soon
+        // as the next message starts with fragment 0.
+        sOutMessage.active = FALSE;
+        return;
+    }
+    // At most one ring's worth: Push fails as soon as the ring is full.
+    while (sOutMessage.done < sOutMessage.length)
+    {
+        size = FragmentSize(sOutMessage.length, sOutMessage.done);
+        fragment[COOP_FRAGMENT_TYPE] = sOutMessage.type;
+        fragment[COOP_FRAGMENT_INDEX] = sOutMessage.nextIndex;
+        fragment[COOP_FRAGMENT_TOTAL_LENGTH] = sOutMessage.length & 0xFF;
+        fragment[COOP_FRAGMENT_TOTAL_LENGTH + 1] = sOutMessage.length >> 8;
+        memcpy(&fragment[COOP_FRAGMENT_HEADER_SIZE], &sOutMessage.data[sOutMessage.done], size);
+        if (!CoopMailbox_Push(COOP_MSG_FRAGMENT, fragment, COOP_FRAGMENT_HEADER_SIZE + size))
+            return; // Ring full: the same fragment is retried next frame.
+        sOutMessage.done += size;
+        sOutMessage.nextIndex++;
+    }
+    sOutMessage.active = FALSE;
+}
+
+bool8 CoopMailbox_IsSending(void)
+{
+    return sOutMessage.active;
+}
+
+// Adds one inbound fragment. Returns TRUE when it completes sInMessage. Any
+// fragment that doesn't continue the message in progress drops it; a first
+// fragment (index 0) always starts a new one.
+static bool8 AddFragment(const struct CoopMailboxSlot *slot)
+{
+    const u8 *payload = slot->payload;
+    u8 type, index;
+    u16 length, size;
+
+    if (slot->length <= COOP_FRAGMENT_HEADER_SIZE)
+    {
+        sInMessage.active = FALSE;
+        return FALSE;
+    }
+    type = payload[COOP_FRAGMENT_TYPE];
+    index = payload[COOP_FRAGMENT_INDEX];
+    length = payload[COOP_FRAGMENT_TOTAL_LENGTH] | (payload[COOP_FRAGMENT_TOTAL_LENGTH + 1] << 8);
+    size = slot->length - COOP_FRAGMENT_HEADER_SIZE;
+
+    if (index == 0)
+    {
+        sInMessage.active = FALSE;
+        if (!IsMessageType(type) || length == 0 || length > COOP_MAILBOX_MESSAGE_MAX)
+            return FALSE;
+        sInMessage.type = type;
+        sInMessage.length = length;
+        sInMessage.nextIndex = 0;
+        sInMessage.done = 0;
+        sInMessage.active = TRUE;
+    }
+    else if (!sInMessage.active || type != sInMessage.type || length != sInMessage.length
+          || index != sInMessage.nextIndex)
+    {
+        sInMessage.active = FALSE;
+        return FALSE;
+    }
+
+    // Every fragment but the last is full, so its size is known in advance.
+    if (size != FragmentSize(sInMessage.length, sInMessage.done))
+    {
+        sInMessage.active = FALSE;
+        return FALSE;
+    }
+    memcpy(&sInMessage.data[sInMessage.done], &payload[COOP_FRAGMENT_HEADER_SIZE], size);
+    sInMessage.done += size;
+    sInMessage.nextIndex++;
+    if (sInMessage.done < sInMessage.length)
+        return FALSE;
+    sInMessage.active = FALSE;
+    return TRUE;
+}
+
+bool8 CoopMailbox_Receive(struct CoopMessage *msg)
+{
+    u8 count;
+
+    for (count = 0; count < COOP_MAILBOX_SLOT_COUNT; count++)
+    {
+        if (!CoopMailbox_Pop(&sInSlot))
+            return FALSE;
+        if (sInSlot.type != COOP_MSG_FRAGMENT)
+        {
+            msg->type = sInSlot.type;
+            msg->length = sInSlot.length;
+            msg->data = sInSlot.payload;
+            return TRUE;
+        }
+        if (AddFragment(&sInSlot))
+        {
+            msg->type = sInMessage.type;
+            msg->length = sInMessage.length;
+            msg->data = sInMessage.data;
+            return TRUE;
+        }
+    }
+    return FALSE;
+}
+
+void CoopMailbox_DiscardInbound(void)
+{
+    u8 count;
+
+    // The ring holds at most COOP_MAILBOX_SLOT_COUNT - 1 slots; the cap only
+    // bounds the loop if Lua keeps writing while it runs.
+    for (count = 0; count < COOP_MAILBOX_SLOT_COUNT && CoopMailbox_Pop(&sInSlot); count++)
+        ;
+    sInMessage.active = FALSE;
 }

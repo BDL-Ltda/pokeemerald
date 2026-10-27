@@ -66,27 +66,27 @@ static s16 ReadS16(const u8 *bytes)
     return (s16)(bytes[0] | (bytes[1] << 8));
 }
 
-static void ApplyPresence(const struct CoopMailboxSlot *msg)
+static void ApplyPresence(const struct CoopMessage *msg)
 {
     struct CoopRemote *remote;
     u8 facing;
 
-    if (msg->length < PRESENCE_INBOUND_LENGTH || msg->payload[PRESENCE_SLOT] >= COOP_REMOTE_SLOTS)
+    if (msg->length < PRESENCE_INBOUND_LENGTH || msg->data[PRESENCE_SLOT] >= COOP_REMOTE_SLOTS)
         return;
 
-    remote = &sRemotes[msg->payload[PRESENCE_SLOT]];
+    remote = &sRemotes[msg->data[PRESENCE_SLOT]];
     remote->used = TRUE;
-    remote->mapGroup = msg->payload[PRESENCE_MAP_GROUP];
-    remote->mapNum = msg->payload[PRESENCE_MAP_NUM];
-    remote->x = ReadS16(&msg->payload[PRESENCE_X]);
-    remote->y = ReadS16(&msg->payload[PRESENCE_Y]);
-    facing = msg->payload[PRESENCE_FACING];
+    remote->mapGroup = msg->data[PRESENCE_MAP_GROUP];
+    remote->mapNum = msg->data[PRESENCE_MAP_NUM];
+    remote->x = ReadS16(&msg->data[PRESENCE_X]);
+    remote->y = ReadS16(&msg->data[PRESENCE_Y]);
+    facing = msg->data[PRESENCE_FACING];
     remote->facing = (facing >= DIR_SOUTH && facing <= DIR_EAST) ? facing : DIR_SOUTH;
-    remote->visible = msg->payload[PRESENCE_VISIBLE] != 0;
-    remote->gender = msg->payload[PRESENCE_GENDER] == FEMALE ? FEMALE : MALE;
+    remote->visible = msg->data[PRESENCE_VISIBLE] != 0;
+    remote->gender = msg->data[PRESENCE_GENDER] == FEMALE ? FEMALE : MALE;
 }
 
-static void ApplyMessage(const struct CoopMailboxSlot *msg)
+static void ApplyMessage(const struct CoopMessage *msg)
 {
     switch (msg->type)
     {
@@ -94,8 +94,13 @@ static void ApplyMessage(const struct CoopMailboxSlot *msg)
         ApplyPresence(msg);
         break;
     case COOP_MSG_LEAVE:
-        if (msg->length >= LEAVE_LENGTH && msg->payload[LEAVE_SLOT] < COOP_REMOTE_SLOTS)
-            memset(&sRemotes[msg->payload[LEAVE_SLOT]], 0, sizeof(struct CoopRemote));
+        if (msg->length >= LEAVE_LENGTH && msg->data[LEAVE_SLOT] < COOP_REMOTE_SLOTS)
+            memset(&sRemotes[msg->data[LEAVE_SLOT]], 0, sizeof(struct CoopRemote));
+        break;
+    case COOP_MSG_DEBUG_ECHO:
+        // Debug path for multi-slot messages: send the bytes back unchanged.
+        // Dropped if a message is still being sent.
+        CoopMailbox_SendMessage(COOP_MSG_DEBUG_ECHO, msg->data, msg->length);
         break;
     }
 }
@@ -258,23 +263,23 @@ void CoopRemote_DespawnAll(void)
 
 void CoopRemote_Update(void)
 {
-    struct CoopMailboxSlot msg;
+    struct CoopMessage msg;
     u8 slot, objectEventId, count;
 
-    // The ring holds at most COOP_MAILBOX_SLOT_COUNT - 1 messages; the cap only
-    // bounds the loop if Lua keeps writing while it runs.
     if (!CoopMailbox_IsLuaConnected())
     {
         // Messages queued by the old session (for example during a battle, when
         // the ring isn't read) are dropped, so a reconnect starts empty. Only
-        // the ROM's tail moves: Lua still owns the inbound head.
-        for (count = 0; count < COOP_MAILBOX_SLOT_COUNT && CoopMailbox_Pop(&msg); count++)
-            ;
+        // the ROM's tail moves: Lua still owns the inbound head. An incomplete
+        // multi-slot message is dropped too.
+        CoopMailbox_DiscardInbound();
         CoopRemote_DespawnAll();
         return;
     }
 
-    for (count = 0; count < COOP_MAILBOX_SLOT_COUNT && CoopMailbox_Pop(&msg); count++)
+    // The ring holds at most COOP_MAILBOX_SLOT_COUNT - 1 slots; the cap only
+    // bounds the loop if Lua keeps writing while it runs.
+    for (count = 0; count < COOP_MAILBOX_SLOT_COUNT && CoopMailbox_Receive(&msg); count++)
         ApplyMessage(&msg);
 
     for (slot = 0; slot < COOP_REMOTE_SLOTS; slot++)
