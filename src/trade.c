@@ -1,4 +1,5 @@
 #include "global.h"
+#include "coop/link_spike.h"
 #include "malloc.h"
 #include "battle_anim.h"
 #include "battle_interface.h"
@@ -924,7 +925,7 @@ static void CB_WaitToStartTrade(void)
 
 static void CB_StartLinkTrade(void)
 {
-    gMain.savedCallback = CB2_StartCreateTradeMenu;
+    gMain.savedCallback = CoopLinkSpike_IsActive() ? CoopLinkSpike_ReturnToField : CB2_StartCreateTradeMenu;
 
     if (gWirelessCommType)
     {
@@ -955,6 +956,7 @@ static void CB_StartLinkTrade(void)
 
 static void CB2_TradeMenu(void)
 {
+    CoopLinkSpike_Trace(2, sTradeMenu->callbackId);
     RunTradeMenuCallback();
     DoQueuedActions();
 
@@ -1052,6 +1054,8 @@ static bool8 BufferTradeParties(void)
     u8 id = GetMultiplayerId();
     int i;
     struct Pokemon *mon;
+
+    CoopLinkSpike_Trace(1, sTradeMenu->bufferPartyState);
 
     switch (sTradeMenu->bufferPartyState)
     {
@@ -1755,7 +1759,7 @@ static void CB_ExitCanceledTrade(void)
             Free(sTradeMenu);
             FreeAllWindowBuffers();
             DestroyWirelessStatusIndicatorSprite();
-            SetMainCallback2(CB2_ReturnToFieldFromMultiplayer);
+            SetMainCallback2(CoopLinkSpike_IsActive() ? CoopLinkSpike_ReturnToField : CB2_ReturnToFieldFromMultiplayer);
         }
     }
     else
@@ -1765,7 +1769,7 @@ static void CB_ExitCanceledTrade(void)
             Free(sMenuTextTileBuffer);
             Free(sTradeMenu);
             FreeAllWindowBuffers();
-            SetMainCallback2(CB2_ReturnToFieldFromMultiplayer);
+            SetMainCallback2(CoopLinkSpike_IsActive() ? CoopLinkSpike_ReturnToField : CB2_ReturnToFieldFromMultiplayer);
         }
     }
 }
@@ -2826,6 +2830,7 @@ static void LoadTradeMonPic(u8 whichParty, u8 state)
 
 void CB2_LinkTrade(void)
 {
+    CoopLinkSpike_Trace(3, gMain.state);
     switch (gMain.state)
     {
     case 0:
@@ -4405,6 +4410,7 @@ static bool8 DoTradeAnim_Wireless(void)
 static void CB2_TryLinkTradeEvolution(void)
 {
     u16 evoTarget;
+    CoopLinkSpike_Trace(4, gMain.state);
     switch (gMain.state)
     {
     case 0:
@@ -4414,6 +4420,7 @@ static void CB2_TryLinkTradeEvolution(void)
     case 4:
         gCB2_AfterEvolution = CB2_SaveAndEndTrade;
         evoTarget = GetEvolutionTargetSpecies(&gPlayerParty[gSelectedTradeMonPositions[TRADE_PLAYER]], EVO_MODE_TRADE, ITEM_NONE);
+        CoopLinkSpike_Trace(8, evoTarget);
         if (evoTarget != SPECIES_NONE)
             TradeEvolutionScene(&gPlayerParty[gSelectedTradeMonPositions[TRADE_PLAYER]], evoTarget, sTradeAnim->monSpriteIds[TRADE_PARTNER], gSelectedTradeMonPositions[TRADE_PLAYER]);
         else if (IsWirelessTrade())
@@ -4675,6 +4682,7 @@ static void CB2_WaitTradeComplete(void)
 
 static void CB2_SaveAndEndTrade(void)
 {
+    CoopLinkSpike_Trace(5, gMain.state);
     switch (gMain.state)
     {
     case 0:

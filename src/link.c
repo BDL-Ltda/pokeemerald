@@ -1,4 +1,5 @@
 #include "global.h"
+#include "coop/link_spike.h"
 #include "m4a.h"
 #include "malloc.h"
 #include "reload_save.h"
@@ -367,6 +368,8 @@ static void Task_TriggerHandshake(u8 taskId)
 void OpenLink(void)
 {
     int i;
+
+    if (CoopLinkSpike_IsActive()) { CoopLinkSpike_Open(); return; }
 
     if (!gWirelessCommType)
     {
@@ -751,6 +754,7 @@ void ClearLinkCallback_2(void)
 
 u8 GetLinkPlayerCount(void)
 {
+    if (CoopLinkSpike_IsActive()) return 2;
     if (gWirelessCommType)
         return Rfu_GetLinkPlayerCount();
 
@@ -1021,6 +1025,7 @@ static void UNUSED SendBerryBlenderNoSpaceForPokeblocks(void)
 
 u8 GetMultiplayerId(void)
 {
+    if (CoopLinkSpike_IsActive()) return CoopLinkSpike_Id();
     if (gWirelessCommType == TRUE)
         return Rfu_GetMultiplayerId();
 
@@ -1037,6 +1042,7 @@ u8 BitmaskAllOtherLinkPlayers(void)
 
 bool8 SendBlock(u8 unused, const void *src, u16 size)
 {
+    if (CoopLinkSpike_IsActive()) return CoopLinkSpike_Send(src, size, FALSE);
     if (gWirelessCommType == TRUE)
         return Rfu_InitBlockSend(src, size);
 
@@ -1045,6 +1051,12 @@ bool8 SendBlock(u8 unused, const void *src, u16 size)
 
 bool8 SendBlockRequest(u8 blockReqType)
 {
+    if (CoopLinkSpike_IsActive())
+    {
+        static const u16 sizes[] = {200, 200, 100, 220, 40};
+        if (blockReqType >= ARRAY_COUNT(sizes)) return FALSE;
+        return CoopLinkSpike_Send(gBlockSendBuffer, sizes[blockReqType], TRUE);
+    }
     if (gWirelessCommType == TRUE)
         return Rfu_SendBlockRequest(blockReqType);
 
@@ -1059,6 +1071,7 @@ bool8 SendBlockRequest(u8 blockReqType)
 
 bool8 IsLinkTaskFinished(void)
 {
+    if (CoopLinkSpike_IsActive()) return CoopLinkSpike_Finished();
     if (gWirelessCommType == TRUE)
         return IsLinkRfuTaskFinished();
 
@@ -1067,6 +1080,7 @@ bool8 IsLinkTaskFinished(void)
 
 u8 GetBlockReceivedStatus(void)
 {
+    if (CoopLinkSpike_IsActive()) return CoopLinkSpike_Received();
     if (gWirelessCommType == TRUE)
         return Rfu_GetBlockReceivedStatus();
 
@@ -1085,6 +1099,8 @@ void ResetBlockReceivedFlags(void)
 {
     int i;
 
+    if (CoopLinkSpike_IsActive()) { CoopLinkSpike_ResetReceived(3); return; }
+
     if (gWirelessCommType == TRUE)
     {
         for (i = 0; i < MAX_RFU_PLAYERS; i++)
@@ -1099,6 +1115,7 @@ void ResetBlockReceivedFlags(void)
 
 void ResetBlockReceivedFlag(u8 who)
 {
+    if (CoopLinkSpike_IsActive()) { CoopLinkSpike_ResetReceived(1 << who); return; }
     if (gWirelessCommType == TRUE)
     {
         Rfu_ResetBlockReceivedFlag(who);
@@ -1289,6 +1306,7 @@ void SaveLinkPlayers(u8 playerCount)
 // current number of connected players to check if anyone dropped out.
 u8 GetSavedPlayerCount(void)
 {
+    if (CoopLinkSpike_IsActive()) return 2;
     return gSavedLinkPlayerCount;
 }
 
@@ -1365,11 +1383,13 @@ void ResetLinkPlayerCount(void)
 
 u8 GetLinkPlayerCount_2(void)
 {
+    if (CoopLinkSpike_IsActive()) return 2;
     return EXTRACT_PLAYER_COUNT(gLinkStatus);
 }
 
 bool8 IsLinkMaster(void)
 {
+    if (CoopLinkSpike_IsActive()) return CoopLinkSpike_Id() == 0;
     if (gWirelessCommType)
         return Rfu_IsMaster();
 
@@ -1383,6 +1403,7 @@ static u8 UNUSED GetDummy2(void)
 
 void SetCloseLinkCallbackAndType(u16 type)
 {
+    if (CoopLinkSpike_IsActive()) { CoopLinkSpike_Barrier(TRUE); return; }
     if (gWirelessCommType == TRUE)
     {
         Rfu_SetCloseLinkCallback();
@@ -1400,6 +1421,7 @@ void SetCloseLinkCallbackAndType(u16 type)
 
 void SetCloseLinkCallback(void)
 {
+    if (CoopLinkSpike_IsActive()) { CoopLinkSpike_Barrier(TRUE); return; }
     if (gWirelessCommType == TRUE)
     {
         Rfu_SetCloseLinkCallback();
@@ -1517,6 +1539,7 @@ static void LinkCB_WaitCloseLinkWithJP(void)
 
 void SetLinkStandbyCallback(void)
 {
+    if (CoopLinkSpike_IsActive()) { CoopLinkSpike_Barrier(FALSE); return; }
     if (gWirelessCommType == TRUE)
     {
         Rfu_SetLinkStandbyCallback();
@@ -1785,6 +1808,8 @@ void LinkPlayerFromBlock(u32 who)
 bool8 HandleLinkConnection(void)
 {
     bool32 main1Failed, main2Failed;
+
+    if (CoopLinkSpike_IsActive()) return FALSE;
 
     if (gWirelessCommType == 0)
     {
@@ -2089,6 +2114,7 @@ static void DequeueRecvCmds(u16 (*recvCmds)[CMD_LENGTH])
 
 void LinkVSync(void)
 {
+    if (CoopLinkSpike_IsActive()) return;
     if (gLink.isMaster)
     {
         switch (gLink.state)

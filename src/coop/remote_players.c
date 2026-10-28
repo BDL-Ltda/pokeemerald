@@ -1,4 +1,5 @@
 #include "global.h"
+#include "coop/link_spike.h"
 #include "event_object_movement.h"
 #include "fieldmap.h"
 #include "link.h"
@@ -96,6 +97,9 @@ static void ApplyMessage(const struct CoopMessage *msg)
     case COOP_MSG_LEAVE:
         if (msg->length >= LEAVE_LENGTH && msg->data[LEAVE_SLOT] < COOP_REMOTE_SLOTS)
             memset(&sRemotes[msg->data[LEAVE_SLOT]], 0, sizeof(struct CoopRemote));
+        break;
+    case COOP_MSG_LINK_SPIKE:
+        CoopLinkSpike_Start(msg);
         break;
     case COOP_MSG_DEBUG_ECHO:
         // Debug path for multi-slot messages: send the bytes back unchanged.
@@ -265,6 +269,9 @@ void CoopRemote_Update(void)
 {
     struct CoopMessage msg;
     u8 slot, objectEventId, count;
+
+    if (CoopLinkSpike_IsActive())
+        return; // The main-loop spike pump owns inbound slots during the test.
 
     if (!CoopMailbox_IsLuaConnected())
     {
