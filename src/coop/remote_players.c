@@ -6,6 +6,7 @@
 #include "sprite.h"
 #include "coop/mailbox.h"
 #include "coop/remote_players.h"
+#include "coop/trade.h"
 #include "constants/coop.h"
 #include "constants/event_object_movement.h"
 #include "constants/event_objects.h"
@@ -88,6 +89,7 @@ static void ApplyPresence(const struct CoopMessage *msg)
 
 static void ApplyMessage(const struct CoopMessage *msg)
 {
+    CoopTrade_HandleMessage(msg);
     switch (msg->type)
     {
     case COOP_MSG_PRESENCE:

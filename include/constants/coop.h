@@ -14,5 +14,7 @@
 // Debug, both directions: the ROM sends a received message of this type back
 // to Lua unchanged, as a multi-slot message (client/debug/echo.lua).
 #define COOP_MSG_DEBUG_ECHO 4
+#define COOP_MSG_TRADE_COMMAND 5
+#define COOP_MSG_TRADE_STATE   6
 
 #endif // GUARD_CONSTANTS_COOP_H

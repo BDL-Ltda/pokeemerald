@@ -25,7 +25,7 @@ struct PlayerAvatar { u8 objectEventId; };
 struct WarpData { s8 mapGroup, mapNum; };
 struct SaveBlock1 { struct WarpData location; };
 struct SaveBlock2 { u8 playerGender; u8 playerTrainerId[TRAINER_ID_LENGTH]; };
-struct Main { void (*callback1)(void); void (*callback2)(void); };
+struct Main { void (*callback1)(void); void (*callback2)(void); u16 newKeys; };
 extern struct Main gMain;
 extern struct ObjectEvent gObjectEvents[OBJECT_EVENTS_COUNT];
 extern struct PlayerAvatar gPlayerAvatar;

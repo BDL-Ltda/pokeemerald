@@ -901,6 +901,39 @@ CableClub_EventScript_DirectCornerAttendant::
 	goto_if_unset FLAG_SYS_POKEDEX_GET, CableClub_EventScript_WirelessClubAdjustements
 	specialvar VAR_RESULT, IsBadEggInParty
 	goto_if_eq VAR_RESULT, TRUE, CableClub_EventScript_AbortLinkPlayerHasBadEgg
+	message CableClub_Text_CoopService
+	waitmessage
+	multichoice 0, 0, MULTI_COOP_TRADE, FALSE
+	switch VAR_RESULT
+	case 0, CableClub_EventScript_CoopTrade
+	case 1, CableClub_EventScript_VanillaDirectCorner
+	goto CableClub_EventScript_AbortLink
+	end
+
+CableClub_EventScript_CoopTrade::
+	call CableClub_EventScript_CheckPartyTradeRequirements
+	goto_if_eq VAR_RESULT, 0, CableClub_EventScript_AbortLink
+	closemessage
+	special CoopTrade_Start
+	goto_if_eq VAR_RESULT, 0, CableClub_EventScript_CoopUnavailable
+	waitstate
+	goto_if_eq VAR_RESULT, 5, CableClub_EventScript_CoopUnavailable
+	release
+	end
+
+CableClub_EventScript_CoopUnavailable::
+	msgbox CableClub_Text_CoopUnavailable, MSGBOX_DEFAULT
+	release
+	end
+
+CableClub_Text_CoopService:
+	.string "Which service would you like?$"
+
+CableClub_Text_CoopUnavailable:
+	.string "The co-op connection is unavailable.\n"
+	.string "Please check your connection.$"
+
+CableClub_EventScript_VanillaDirectCorner::
 	specialvar VAR_RESULT, IsWirelessAdapterConnected
 	goto_if_eq VAR_RESULT, FALSE, CableClub_EventScript_WelcomeToCableClub
 	message CableClub_Text_WelcomeWhichDirectCornerRoom

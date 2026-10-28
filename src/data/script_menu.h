@@ -782,8 +782,18 @@ struct MultichoiceListStruct
     u8 count;
 };
 
+static const u8 sText_CoopTrade[] = _("Co-op trade");
+static const u8 sText_LinkServices[] = _("Link services");
+static const struct MenuAction MultichoiceList_CoopTrade[] =
+{
+    {sText_CoopTrade},
+    {sText_LinkServices},
+    {gText_Exit},
+};
+
 static const struct MultichoiceListStruct sMultichoiceLists[] =
 {
+    [MULTI_COOP_TRADE]                = MULTICHOICE(MultichoiceList_CoopTrade),
     [MULTI_BRINEY_ON_DEWFORD]          = MULTICHOICE(MultichoiceList_BrineyOnDewford),
     [MULTI_PC]                         = MULTICHOICE(MultichoiceList_Exit),
     [MULTI_ENTERINFO]                  = MULTICHOICE(MultichoiceList_EnterInfo),
