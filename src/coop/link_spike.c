@@ -124,7 +124,7 @@ void CoopLinkSpike_Start(const struct CoopMessage *msg)
     u8 id;
     if (sSpike.active || msg->length != 3 || msg->data[0] != START || msg->data[1] > 1 || msg->data[2] > 1
      || gMain.callback1 != CB1_Overworld || gMain.callback2 != CB2_Overworld
-     || ArePlayerFieldControlsLocked() || CalculatePlayerPartyCount() == 0)
+     || ArePlayerFieldControlsLocked() || (CalculatePlayerPartyCount() == 0 && !msg->data[2]))
         return;
     id = msg->data[1];
     memset(&sSpike, 0, sizeof(sSpike));

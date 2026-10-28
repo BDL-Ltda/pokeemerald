@@ -122,6 +122,7 @@ int main(void) {
     {
         u8 start[] = {0, 0, 2};
         struct CoopMessage msg = {COOP_MSG_LINK_SPIKE, sizeof(start), start};
+        partyCount = 0; // Fixtures also work before the original save has a starter.
         CoopLinkSpike_Start(&msg); assert(!sSpike.active && fixtureCalls == 0);
         start[2] = 1;
         CoopLinkSpike_Start(&msg); assert(sSpike.active && fixtureCalls == 2);
