@@ -56,6 +56,7 @@ void LocalLinkPlayerToBlock(void);
 void ConvertLinkPlayerName(struct LinkPlayer *player);
 void SetDynamicWarpWithCoords(int unused, s8 group, s8 number, s8 warp, s8 x, s8 y);
 void ScriptContext_Init(void);
+u8 FlagSet(u16 id);
 void UnlockPlayerFieldControls(void);
 void CB2_ReturnToField(void);
 void CB2_StartCreateTradeMenu(void);

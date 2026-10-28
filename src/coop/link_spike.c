@@ -9,6 +9,7 @@
 #include "pokemon.h"
 #include "script.h"
 #include "trade.h"
+#include "constants/flags.h"
 #include "constants/species.h"
 
 // Temporary mailbox message 5, documented in docs/virtual-link-spike.md.
@@ -139,6 +140,9 @@ void CoopLinkSpike_Start(const struct CoopMessage *msg)
                   25, USE_RANDOM_IVS, FALSE, 0, OT_ID_PLAYER_ID, 0);
         CreateMon(&gPlayerParty[1], SPECIES_ZIGZAGOON, 10, USE_RANDOM_IVS, FALSE, 0, OT_ID_PLAYER_ID, 0);
         CalculatePlayerPartyCount();
+        // Early-game fixture saves may not have received the starter yet. The
+        // vanilla menu checks this saved flag, not the number of party members.
+        FlagSet(FLAG_SYS_POKEMON_GET);
     }
     CoopRemote_DespawnAll();
     gWirelessCommType = 0;

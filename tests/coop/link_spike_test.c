@@ -3,6 +3,7 @@
 #include "global.h"
 #include "coop/mailbox.h"
 #include "coop/link_spike.h"
+#include "constants/flags.h"
 
 struct Main gMain;
 struct SaveBlock save, *gSaveBlock1Ptr = &save;
@@ -15,6 +16,7 @@ void (*gFieldCallback)(void);
 static bool8 locked, busy, accept, entered, returned;
 static u8 partyCount;
 static u8 fixtureCalls;
+static u8 fixtureFlagCalls;
 static struct CoopMessage incoming;
 static u8 incomingBytes[257], outgoing[257];
 static u16 outSize;
@@ -40,6 +42,11 @@ void SetDynamicWarpWithCoords(int a, s8 b, s8 c, s8 d, s8 e, s8 f) {
     (void)a; (void)b; (void)c; (void)d; (void)e; (void)f;
 }
 void ScriptContext_Init(void) {}
+u8 FlagSet(u16 id) {
+    assert(id == FLAG_SYS_POKEMON_GET);
+    fixtureFlagCalls++;
+    return 0;
+}
 void UnlockPlayerFieldControls(void) { locked = FALSE; }
 void CB2_ReturnToField(void) { returned = TRUE; }
 void CB2_StartCreateTradeMenu(void) { entered = TRUE; }
@@ -68,6 +75,7 @@ static void Reset(void) {
     busy = locked = entered = returned = FALSE; accept = TRUE; partyCount = 2;
     incoming.length = outSize = 0;
     fixtureCalls = 0;
+    fixtureFlagCalls = 0;
 }
 static void Input(u8 type, const void *data, u16 size) {
     incomingBytes[0] = type;
@@ -108,7 +116,7 @@ int main(void) {
     Reset(); locked = TRUE; Start(0); assert(!sSpike.active);
     locked = FALSE; partyCount = 0; Start(0); assert(!sSpike.active);
     partyCount = 2; Start(2); assert(!sSpike.active);
-    Start(0); assert(sSpike.active && !entered && fixtureCalls == 0);
+    Start(0); assert(sSpike.active && !entered && fixtureCalls == 0 && fixtureFlagCalls == 0);
     accept = FALSE; CoopLinkSpike_Update(); assert(sSpike.count == 1);
     accept = TRUE; CoopLinkSpike_Update();
     assert(outSize == sizeof(peer) + 1 && outgoing[0] == HELLO);
@@ -145,9 +153,9 @@ int main(void) {
         u8 start[] = {0, 0, 2};
         struct CoopMessage msg = {COOP_MSG_LINK_SPIKE, sizeof(start), start};
         partyCount = 0; // Fixtures also work before the original save has a starter.
-        CoopLinkSpike_Start(&msg); assert(!sSpike.active && fixtureCalls == 0);
+        CoopLinkSpike_Start(&msg); assert(!sSpike.active && fixtureCalls == 0 && fixtureFlagCalls == 0);
         start[2] = 1;
-        CoopLinkSpike_Start(&msg); assert(sSpike.active && fixtureCalls == 2);
+        CoopLinkSpike_Start(&msg); assert(sSpike.active && fixtureCalls == 2 && fixtureFlagCalls == 1);
     }
     puts("PASS coop link spike: guarded entry, identity, backpressure, self echo, requests, barriers, close/reopen, return and bounds");
     return 0;
