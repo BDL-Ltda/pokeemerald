@@ -199,7 +199,9 @@ void CoopLinkSpike_ReturnToField(void)
     sSpike.returning = TRUE;
     CoopLinkSpike_Trace(6, 1);
     gReceivedRemoteLinkPlayers = FALSE;
-    gMain.callback1 = NULL;
+    // ReturnToFieldLocal reloads graphics but preserves callback1. Restore the
+    // input callback cleared by the animation (or left as link update on cancel).
+    SetMainCallback1(CB1_Overworld);
     gFieldCallback = NULL;
     ScriptContext_Init();
     UnlockPlayerFieldControls();
@@ -211,7 +213,8 @@ void CoopLinkSpike_Update(void)
     struct CoopMessage msg;
     u8 count;
     struct Packet *packet;
-    if (sSpike.returning && gMain.callback2 == CB2_Overworld)
+    if (sSpike.returning && gMain.callback1 == CB1_Overworld
+     && gMain.callback2 == CB2_Overworld && !ArePlayerFieldControlsLocked())
     {
         CoopLinkSpike_Trace(6, 2);
         sSpike.returning = FALSE;

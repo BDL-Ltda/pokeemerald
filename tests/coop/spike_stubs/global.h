@@ -48,6 +48,7 @@ extern u16 gLinkType;
 extern void (*gFieldCallback)(void);
 void CB1_Overworld(void);
 void CB2_Overworld(void);
+void SetMainCallback1(void (*callback)(void));
 bool8 ArePlayerFieldControlsLocked(void);
 u8 CalculatePlayerPartyCount(void);
 void CoopRemote_DespawnAll(void);

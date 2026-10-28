@@ -20,6 +20,7 @@ static u8 incomingBytes[257], outgoing[257];
 static u16 outSize;
 void CB1_Overworld(void) {}
 void CB2_Overworld(void) {}
+void SetMainCallback1(void (*callback)(void)) { gMain.callback1 = callback; }
 bool8 ArePlayerFieldControlsLocked(void) { return locked; }
 u8 CalculatePlayerPartyCount(void) { return partyCount; }
 void CoopRemote_DespawnAll(void) {}
@@ -39,7 +40,7 @@ void SetDynamicWarpWithCoords(int a, s8 b, s8 c, s8 d, s8 e, s8 f) {
     (void)a; (void)b; (void)c; (void)d; (void)e; (void)f;
 }
 void ScriptContext_Init(void) {}
-void UnlockPlayerFieldControls(void) {}
+void UnlockPlayerFieldControls(void) { locked = FALSE; }
 void CB2_ReturnToField(void) { returned = TRUE; }
 void CB2_StartCreateTradeMenu(void) { entered = TRUE; }
 bool8 CoopMailbox_IsSending(void) { return busy; }
@@ -80,6 +81,26 @@ static void Start(u8 role) {
     struct CoopMessage msg = {COOP_MSG_LINK_SPIKE, sizeof(bytes), bytes};
     CoopLinkSpike_Start(&msg);
 }
+static void TradeCallback(void) {}
+static void CheckFieldReturn(void (*previousCallback)(void)) {
+    Reset(); Start(0);
+    // Animation clears callback1; cancel leaves the trade's link callback.
+    gMain.callback1 = previousCallback;
+    gMain.callback2 = TradeCallback;
+    gFieldCallback = TradeCallback;
+    locked = TRUE;
+    gReceivedRemoteLinkPlayers = TRUE;
+    CoopLinkSpike_ReturnToField();
+    assert(returned && !sSpike.active && !gReceivedRemoteLinkPlayers);
+    assert(gMain.callback1 == CB1_Overworld && !locked && gFieldCallback == NULL);
+    CoopLinkSpike_Update(); assert(sSpike.returning);
+    // Drawing the field alone is insufficient: wait for its fade to unlock input.
+    gMain.callback2 = CB2_Overworld;
+    locked = TRUE;
+    CoopLinkSpike_Update(); assert(sSpike.returning);
+    locked = FALSE;
+    CoopLinkSpike_Update(); assert(!sSpike.returning);
+}
 int main(void) {
     u8 bytes[256], generation = 1;
     struct LinkPlayer peer = {0};
@@ -109,7 +130,8 @@ int main(void) {
     assert(gReceivedRemoteLinkPlayers);
     Input(CLOSE, &generation, 1); assert(!gReceivedRemoteLinkPlayers);
     CoopLinkSpike_Open(); assert(gReceivedRemoteLinkPlayers && sSpike.close == 0);
-    CoopLinkSpike_ReturnToField(); assert(returned && !sSpike.active);
+    CheckFieldReturn(NULL);
+    CheckFieldReturn(TradeCallback);
     Reset(); Start(1); CoopLinkSpike_Update();
     memset(gBlockSendBuffer, 0xCD, sizeof(gBlockSendBuffer));
     Input(REQUEST, bytes, 200);
