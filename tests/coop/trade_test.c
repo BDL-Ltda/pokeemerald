@@ -156,12 +156,34 @@ static void TestAllocationFailures(void)
     assert(!sUi.active && gSpecialVar_Result == 0 && !sTask);
 }
 
+static void TestPendingCommandSurvivesInput(void)
+{
+    Setup();
+    Snapshot(STATE_WAITING, 2, "alpha", "zebra");
+    QueueCommand(COMMAND_OPEN, NULL);
+    while (CoopMailbox_Push(COOP_MSG_DEBUG_ECHO, NULL, 0)) ;
+    Step(A_BUTTON | DPAD_DOWN);
+    assert(sUi.pendingLength == 3 && sUi.pending[0] == COMMAND_OPEN && sUi.cursor == 0);
+    Drain(); Step(0);
+    assert(Last()->payload[0] == COMMAND_OPEN && !sUi.pendingLength);
+    Step(A_BUTTON);
+    assert(sUi.pending[0] == COMMAND_INVITE);
+    while (CoopMailbox_Push(COOP_MSG_DEBUG_ECHO, NULL, 0)) ;
+    Step(A_BUTTON | DPAD_DOWN);
+    assert(sUi.pending[0] == COMMAND_INVITE && sUi.cursor == 0);
+    Step(B_BUTTON);
+    assert(sUi.pending[0] == COMMAND_CANCEL && sUi.closing);
+    Drain(); Step(0);
+    assert(!sUi.active && sResumed == 1);
+}
+
 int main(void)
 {
     TestListAndTarget();
     TestFullRingCancelAndDisconnect();
     TestUntrustedSnapshotsAndGlyphs();
     TestAllocationFailures();
-    puts("4 trade task/decoder test groups passed");
+    TestPendingCommandSurvivesInput();
+    puts("5 trade task/decoder test groups passed");
     return 0;
 }

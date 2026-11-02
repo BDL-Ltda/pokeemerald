@@ -14,7 +14,9 @@
 // Debug, both directions: the ROM sends a received message of this type back
 // to Lua unchanged, as a multi-slot message (client/debug/echo.lua).
 #define COOP_MSG_DEBUG_ECHO 4
-#define COOP_MSG_TRADE_COMMAND 5
-#define COOP_MSG_TRADE_STATE   6
+// 5/6 are reserved for the parallel virtual-link spike (parent PR #94).
+// These attendant types are unreleased; allocate distinct IDs before merging.
+#define COOP_MSG_TRADE_COMMAND 7
+#define COOP_MSG_TRADE_STATE   8
 
 #endif // GUARD_CONSTANTS_COOP_H
