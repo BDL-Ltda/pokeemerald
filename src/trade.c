@@ -1,5 +1,5 @@
 #include "global.h"
-#include "coop/link_spike.h"
+#include "coop/virtual_link.h"
 #include "malloc.h"
 #include "battle_anim.h"
 #include "battle_interface.h"
@@ -925,7 +925,7 @@ static void CB_WaitToStartTrade(void)
 
 static void CB_StartLinkTrade(void)
 {
-    gMain.savedCallback = CoopLinkSpike_IsActive() ? CoopLinkSpike_ReturnToField : CB2_StartCreateTradeMenu;
+    gMain.savedCallback = CoopLink_IsActive() ? CoopLink_ReturnToField : CB2_StartCreateTradeMenu;
 
     if (gWirelessCommType)
     {
@@ -956,7 +956,6 @@ static void CB_StartLinkTrade(void)
 
 static void CB2_TradeMenu(void)
 {
-    CoopLinkSpike_Trace(2, sTradeMenu->callbackId);
     RunTradeMenuCallback();
     DoQueuedActions();
 
@@ -1055,7 +1054,6 @@ static bool8 BufferTradeParties(void)
     int i;
     struct Pokemon *mon;
 
-    CoopLinkSpike_Trace(1, sTradeMenu->bufferPartyState);
 
     switch (sTradeMenu->bufferPartyState)
     {
@@ -1759,7 +1757,7 @@ static void CB_ExitCanceledTrade(void)
             Free(sTradeMenu);
             FreeAllWindowBuffers();
             DestroyWirelessStatusIndicatorSprite();
-            SetMainCallback2(CoopLinkSpike_IsActive() ? CoopLinkSpike_ReturnToField : CB2_ReturnToFieldFromMultiplayer);
+            SetMainCallback2(CoopLink_IsActive() ? CoopLink_ReturnToField : CB2_ReturnToFieldFromMultiplayer);
         }
     }
     else
@@ -1769,7 +1767,7 @@ static void CB_ExitCanceledTrade(void)
             Free(sMenuTextTileBuffer);
             Free(sTradeMenu);
             FreeAllWindowBuffers();
-            SetMainCallback2(CoopLinkSpike_IsActive() ? CoopLinkSpike_ReturnToField : CB2_ReturnToFieldFromMultiplayer);
+            SetMainCallback2(CoopLink_IsActive() ? CoopLink_ReturnToField : CB2_ReturnToFieldFromMultiplayer);
         }
     }
 }
@@ -2761,6 +2759,11 @@ static void ClearLinkTimeoutTimer(void)
 
 static void CheckForLinkTimeout(void)
 {
+    // The co-op virtual link has its own timeout and cancels cleanly; never
+    // show the cable's link error screen for it.
+    if (CoopLink_IsActive())
+        return;
+
     if (sTradeAnim->linkTimeoutZero1 == sTradeAnim->linkTimeoutZero2)
         sTradeAnim->linkTimeoutTimer++;
     else
@@ -2830,7 +2833,6 @@ static void LoadTradeMonPic(u8 whichParty, u8 state)
 
 void CB2_LinkTrade(void)
 {
-    CoopLinkSpike_Trace(3, gMain.state);
     switch (gMain.state)
     {
     case 0:
@@ -4410,7 +4412,6 @@ static bool8 DoTradeAnim_Wireless(void)
 static void CB2_TryLinkTradeEvolution(void)
 {
     u16 evoTarget;
-    CoopLinkSpike_Trace(4, gMain.state);
     switch (gMain.state)
     {
     case 0:
@@ -4420,7 +4421,6 @@ static void CB2_TryLinkTradeEvolution(void)
     case 4:
         gCB2_AfterEvolution = CB2_SaveAndEndTrade;
         evoTarget = GetEvolutionTargetSpecies(&gPlayerParty[gSelectedTradeMonPositions[TRADE_PLAYER]], EVO_MODE_TRADE, ITEM_NONE);
-        CoopLinkSpike_Trace(8, evoTarget);
         if (evoTarget != SPECIES_NONE)
             TradeEvolutionScene(&gPlayerParty[gSelectedTradeMonPositions[TRADE_PLAYER]], evoTarget, sTradeAnim->monSpriteIds[TRADE_PARTNER], gSelectedTradeMonPositions[TRADE_PLAYER]);
         else if (IsWirelessTrade())
@@ -4682,7 +4682,6 @@ static void CB2_WaitTradeComplete(void)
 
 static void CB2_SaveAndEndTrade(void)
 {
-    CoopLinkSpike_Trace(5, gMain.state);
     switch (gMain.state)
     {
     case 0:
@@ -4691,6 +4690,8 @@ static void CB2_SaveAndEndTrade(void)
         DrawTextOnTradeWindow(0, gStringVar4, 0);
         break;
     case 1:
+        // A co-op trade can no longer be canceled once this barrier is sent.
+        CoopLink_OnSaveStart();
         SetTradeLinkStandbyCallback(0);
         gMain.state = 100;
         sTradeAnim->timer = 0;
@@ -5105,4 +5106,90 @@ static void CB2_SaveAndEndWirelessTrade(void)
     AnimateSprites();
     BuildOamBuffer();
     UpdatePaletteFade();
+}
+
+// Emerald Co-Op virtual link (#81): leaving a cable trade whose partner is
+// gone, before its save started. Fades out, frees what the current trade
+// screen allocated, and returns through CoopLink_ReturnToField, which puts the
+// party back. The vanilla link error screen is never shown.
+static void CoopLeaveTrade(bool8 fromMenu)
+{
+    switch (gMain.state)
+    {
+    case 0:
+        if (!gPaletteFade.active)
+        {
+            gPaletteFade.bufferTransferDisabled = FALSE;
+            BeginNormalPaletteFade(PALETTES_ALL, 0, 0, 16, RGB_BLACK);
+            FadeOutBGM(4);
+            gMain.state++;
+        }
+        break;
+    case 1:
+        if (!gPaletteFade.active)
+        {
+            // The trade VBlank callbacks may read the memory freed below.
+            SetVBlankCallback(NULL);
+            if (fromMenu)
+            {
+                // As CB_ExitCanceledTrade.
+                Free(sMenuTextTileBuffer);
+                Free(sTradeMenu);
+                FreeAllWindowBuffers();
+            }
+            else
+            {
+                // As CB2_FreeTradeAnim.
+                FreeAllWindowBuffers();
+                Free(GetBgTilemapBuffer(3));
+                Free(GetBgTilemapBuffer(1));
+                Free(GetBgTilemapBuffer(0));
+                FreeMonSpritesGfx();
+                FREE_AND_SET_NULL(sTradeAnim);
+            }
+            SetMainCallback2(CoopLink_ReturnToField);
+            return;
+        }
+        break;
+    }
+    AnimateSprites();
+    BuildOamBuffer();
+    UpdatePaletteFade();
+}
+
+static void CB2_CoopLeaveTradeMenu(void)
+{
+    CoopLeaveTrade(TRUE);
+}
+
+static void CB2_CoopLeaveTradeAnim(void)
+{
+    CoopLeaveTrade(FALSE);
+}
+
+bool8 TryLeaveCoopLinkTrade(void)
+{
+    MainCallback callback = gMain.callback2;
+
+    // Menu screens, once their state 0 has allocated the menu.
+    if (callback == CB2_TradeMenu
+     || (callback == CB2_CreateTradeMenu && gMain.state != 0)
+     || (callback == CB2_ReturnToTradeMenu && gMain.state != 0))
+    {
+        SetMainCallback2(CB2_CoopLeaveTradeMenu);
+        return TRUE;
+    }
+    // Animation screens, up to the first save barrier (CoopLink_OnSaveStart).
+    // The summary and evolution screens own other memory: wait until they
+    // return to one of these.
+    if ((callback == CB2_LinkTrade && gMain.state != 0)
+     || callback == CB2_UpdateLinkTrade
+     || callback == CB2_WaitTradeComplete
+     || callback == CB2_TryLinkTradeEvolution
+     || (callback == CB2_SaveAndEndTrade && gMain.state <= 1))
+    {
+        SetMainCallback2(CB2_CoopLeaveTradeAnim);
+        return TRUE;
+    }
+    return FALSE;
 }

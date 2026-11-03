@@ -28,4 +28,15 @@ void CoopRemote_Update(void);
 // Removes every remote object and forgets every slot (Lua disconnected).
 void CoopRemote_DespawnAll(void);
 
+// Removes every remote object but keeps the slots, so CoopRemote_Update
+// spawns them again (a trade session leaves the overworld, and its save must
+// not contain remote objects).
+void CoopRemote_HideAll(void);
+
+struct CoopMessage;
+
+// Applies one inbound message (presence, leave, ...) without touching
+// objects. The virtual link calls it while it owns the inbound ring.
+void CoopRemote_ApplyMessage(const struct CoopMessage *msg);
+
 #endif // GUARD_COOP_REMOTE_PLAYERS_H

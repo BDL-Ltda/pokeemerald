@@ -1,5 +1,5 @@
 #include "global.h"
-#include "coop/link_spike.h"
+#include "coop/virtual_link.h"
 #include "event_object_movement.h"
 #include "fieldmap.h"
 #include "link.h"
@@ -98,8 +98,8 @@ static void ApplyMessage(const struct CoopMessage *msg)
         if (msg->length >= LEAVE_LENGTH && msg->data[LEAVE_SLOT] < COOP_REMOTE_SLOTS)
             memset(&sRemotes[msg->data[LEAVE_SLOT]], 0, sizeof(struct CoopRemote));
         break;
-    case COOP_MSG_LINK_SPIKE:
-        CoopLinkSpike_Start(msg);
+    case COOP_MSG_LINK:
+        CoopLink_HandleIdleMessage(msg);
         break;
     case COOP_MSG_DEBUG_ECHO:
         // Debug path for multi-slot messages: send the bytes back unchanged.
@@ -252,7 +252,7 @@ static void StepToward(u8 slot, struct ObjectEvent *objectEvent)
     }
 }
 
-void CoopRemote_DespawnAll(void)
+void CoopRemote_HideAll(void)
 {
     u8 i;
 
@@ -262,7 +262,17 @@ void CoopRemote_DespawnAll(void)
         if (CoopRemote_IsRemoteObjectEvent(&gObjectEvents[i]))
             Despawn(&gObjectEvents[i]);
     }
+}
+
+void CoopRemote_DespawnAll(void)
+{
+    CoopRemote_HideAll();
     memset(sRemotes, 0, sizeof(sRemotes));
+}
+
+void CoopRemote_ApplyMessage(const struct CoopMessage *msg)
+{
+    ApplyMessage(msg);
 }
 
 void CoopRemote_Update(void)
@@ -270,8 +280,8 @@ void CoopRemote_Update(void)
     struct CoopMessage msg;
     u8 slot, objectEventId, count;
 
-    if (CoopLinkSpike_IsActive())
-        return; // The main-loop spike pump owns inbound slots during the test.
+    if (CoopLink_IsActive())
+        return; // The virtual link owns the inbound ring during a trade session.
 
     if (!CoopMailbox_IsLuaConnected())
     {

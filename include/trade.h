@@ -21,4 +21,10 @@ void LinkTradeDrawWindow(void);
 void LoadTradeAnimGfx(void);
 void DrawTextOnTradeWindow(u8 windowId, const u8 *str, u8 speed);
 
+// Emerald Co-Op virtual link (#81): leaves the cable trade screen at once,
+// freeing it, and returns through CoopLink_ReturnToField. FALSE when the
+// current screen can't be left yet (summary, evolution, or after the first
+// save barrier); try again on a later frame.
+bool8 TryLeaveCoopLinkTrade(void);
+
 #endif //GUARD_TRADE_H

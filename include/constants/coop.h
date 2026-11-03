@@ -14,8 +14,9 @@
 // Debug, both directions: the ROM sends a received message of this type back
 // to Lua unchanged, as a multi-slot message (client/debug/echo.lua).
 #define COOP_MSG_DEBUG_ECHO 4
-// Temporary issue #80 experiment. Not used by the normal presence client.
-#define COOP_MSG_LINK_SPIKE 5
-#define COOP_MSG_SPIKE_TRACE 6
+// Both directions, multi-slot: one virtual-link packet (include/coop/virtual_link.h).
+// Replaces the issue #80 spike's experimental type 5.
+#define COOP_MSG_LINK 5
+// 6 was the #80 spike's debug trace. Retired: never reuse it.
 
 #endif // GUARD_CONSTANTS_COOP_H

@@ -1,5 +1,5 @@
 #include "global.h"
-#include "coop/link_spike.h"
+#include "coop/virtual_link.h"
 #include "crt0.h"
 #include "malloc.h"
 #include "link.h"
@@ -173,7 +173,7 @@ void AgbMain(void)
 
 static void UpdateLinkAndCallCallbacks(void)
 {
-    CoopLinkSpike_Update();
+    CoopLink_Update();
     if (!HandleLinkConnection())
         CallCallbacks();
 }
